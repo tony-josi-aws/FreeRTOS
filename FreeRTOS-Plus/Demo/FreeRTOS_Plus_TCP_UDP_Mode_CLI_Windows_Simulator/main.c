@@ -59,7 +59,7 @@
 
 /* Set the following constants to 1 or 0 to define which tasks to include and
 exclude. */
-#define mainCREATE_UDP_CLI_TASKS                    1
+#define mainCREATE_UDP_CLI_TASKS                    0
 #define mainCREATE_SIMPLE_UDP_CLIENT_SERVER_TASKS   0
 #define mainCREATE_UDP_ECHO_TASKS                   1
 
@@ -192,6 +192,65 @@ const uint32_t ulLongTime_ms = 250UL;
     }
 }
 /*-----------------------------------------------------------*/
+
+void vApplicationIPNetworkEventHook(eIPCallbackEvent_t eNetworkEvent)
+{
+    uint32_t ulIPAddress, ulNetMask, ulGatewayAddress, ulDNSServerAddress;
+    char cBuffer[16];
+    static BaseType_t xTasksAlreadyCreated = pdFALSE;
+
+    /* If the network has just come up...*/
+    if (eNetworkEvent == eNetworkUp)
+    {
+        static BaseType_t xTasksAlreadyCreated = pdFALSE;
+
+        /* If the network has just come up...*/
+        if (eNetworkEvent == eNetworkUp)
+        {
+            /* Create the tasks that use the IP stack if they have not already been
+             * created. */
+            if (xTasksAlreadyCreated == pdFALSE)
+            {
+                /* See the comments above the definitions of these pre-processor
+                 * macros at the top of this file for a description of the individual
+                 * demo tasks. */
+#if ( mainCREATE_SIMPLE_UDP_CLIENT_SERVER_TASKS == 1 )
+                {
+                    vStartSimpleUDPClientServerTasks(configMINIMAL_STACK_SIZE, mainSIMPLE_CLIENT_SERVER_PORT, mainSIMPLE_CLIENT_SERVER_TASK_PRIORITY);
+                }
+#endif /* mainCREATE_SIMPLE_UDP_CLIENT_SERVER_TASKS */
+
+#if ( mainCREATE_UDP_ECHO_TASKS == 1 )
+                {
+                    vStartEchoClientTasks(mainECHO_CLIENT_TASK_STACK_SIZE, mainECHO_CLIENT_TASK_PRIORITY);
+                }
+#endif
+
+                xTasksAlreadyCreated = pdTRUE;
+            }
+
+            /* Print out the network configuration, which may have come from a DHCP
+             * server. */
+#if defined( FREERTOS_PLUS_TCP_VERSION ) && ( FREERTOS_PLUS_TCP_VERSION >= 10 )
+            FreeRTOS_GetEndPointConfiguration(&ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress, pxNetworkEndPoints);
+#else
+            FreeRTOS_GetAddressConfiguration(&ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress);
+#endif /* if defined( FREERTOS_PLUS_TCP_VERSION ) && ( FREERTOS_PLUS_TCP_VERSION >= 10 ) */
+
+            FreeRTOS_inet_ntoa(ulIPAddress, cBuffer);
+            FreeRTOS_printf(("\r\n\r\nIP Address: %s\r\n", cBuffer));
+
+            FreeRTOS_inet_ntoa(ulNetMask, cBuffer);
+            FreeRTOS_printf(("Subnet Mask: %s\r\n", cBuffer));
+
+            FreeRTOS_inet_ntoa(ulGatewayAddress, cBuffer);
+            FreeRTOS_printf(("Gateway Address: %s\r\n", cBuffer));
+
+            FreeRTOS_inet_ntoa(ulDNSServerAddress, cBuffer);
+            FreeRTOS_printf(("DNS Server Address: %s\r\n\r\n\r\n", cBuffer));
+        }
+    }
+}
 
 void vApplicationIdleHook( void )
 {

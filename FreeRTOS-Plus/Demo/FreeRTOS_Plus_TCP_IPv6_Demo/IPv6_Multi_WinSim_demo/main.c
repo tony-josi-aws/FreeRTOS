@@ -107,8 +107,9 @@
  * received on that connection.
  */
 #define mainCREATE_SIMPLE_UDP_CLIENT_SERVER_TASKS     0
-#define mainCREATE_TCP_ECHO_TASKS_SINGLE              1 /* 1 */
+#define mainCREATE_TCP_ECHO_TASKS_SINGLE              0 /* 1 */
 #define mainCREATE_TCP_ECHO_SERVER_TASK               0
+#define mainCREATE_UDP_ECHO_TASKS_SINGLE              1
 /*-----------------------------------------------------------*/
 
 /* Define a task that is used to start and monitor several tests. */
@@ -437,6 +438,12 @@ void vAssertCalled( const char * pcFile,
                 }
             #endif /* mainCREATE_TCP_ECHO_TASKS_SINGLE */
 
+            #if ( mainCREATE_UDP_ECHO_TASKS_SINGLE == 1 )
+                {
+                    vStartUDPEchoClientTasks_SingleTasks(mainECHO_CLIENT_TASK_STACK_SIZE, mainECHO_CLIENT_TASK_PRIORITY);
+                }
+            #endif /* mainCREATE_UDP_ECHO_TASKS_SINGLE */
+
             #if ( mainCREATE_TCP_ECHO_SERVER_TASK == 1 )
                 {
                     vStartSimpleTCPServerTasks( mainECHO_SERVER_TASK_STACK_SIZE, mainECHO_SERVER_TASK_PRIORITY );
@@ -713,7 +720,7 @@ const char * pcCommandList[] =
     /*    "arpqc 192.168.2.10", */
     /*    "arpqc 172.217.194.100", */
     /*    "arpqc 2404:6800:4003:c0f::5e", */
-        "ifconfig",
+        "ifconfig", 
         /*      "udp 192.168.2.255@2402 Hello", */
         /*      "udp 192.168.2.255@2402 Hello", */
         /*      "udp 192.168.2.255@2402 Hello", */

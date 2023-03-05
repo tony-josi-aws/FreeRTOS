@@ -53,6 +53,8 @@
 
 //#include "tcp_echo_config.h"
 
+#define USE_ZERO_COPY               ( 1 )
+
 /* Exclude the whole file if FreeRTOSIPConfig.h is configured to use UDP only. */
 #if( ipconfigUSE_TCP == 1 )
 
@@ -77,6 +79,7 @@ sent is a pseudo random size between 20 and echoBUFFER_SIZES. */
  * port number 7.
  */
 static void prvEchoClientTask( void *pvParameters );
+static void prvUDPEchoClientTask(void* pvParameters);
 
 /*
  * Creates a pseudo random sized buffer of data to send to the echo server.
@@ -134,6 +137,39 @@ void vStartTCPEchoClientTasks_SingleTasks( uint16_t usTaskStackSize, UBaseType_t
 		FreeRTOS_printf( ( "vStartTCPEchoClientTasks_SingleTasks: already started\n" ) );
 	}
 }
+
+void vStartUDPEchoClientTasks_SingleTasks(uint16_t usTaskStackSize, UBaseType_t uxTaskPriority)
+{
+
+    if (xHasStarted == pdFALSE)
+    {
+        BaseType_t xCount = 0;
+        BaseType_t x;
+
+        xHasStarted = pdTRUE;
+        /* Create the echo client tasks. */
+        for (x = 0; x < echoNUM_ECHO_CLIENTS; x++)
+        {
+            char ucName[16];
+            snprintf(ucName, sizeof ucName, "echo_%02d", (int)x);
+            BaseType_t rc = xTaskCreate(prvUDPEchoClientTask,	/* The function that implements the task. */
+                ucName,				/* Just a text name for the task to aid debugging. */
+                usTaskStackSize,	/* The stack size is defined in FreeRTOSIPConfig.h. */
+                (void*)x,		/* The task parameter, not used in this case. */
+                uxTaskPriority,		/* The priority assigned to the task is defined in FreeRTOSConfig.h. */
+                NULL);				/* The task handle is not used. */
+            if (rc == pdPASS)
+            {
+                xCount++;
+            }
+        }
+        FreeRTOS_printf(("Started %d / %d tasks\n", (int)xCount, (int)echoNUM_ECHO_CLIENTS));
+    }
+    else
+    {
+        FreeRTOS_printf(("vStartUDPEchoClientTasks_SingleTasks: already started\n"));
+    }
+}
 /*-----------------------------------------------------------*/
 
 static BaseType_t xIsFatalError( BaseType_t xCode )
@@ -146,6 +182,217 @@ static BaseType_t xIsFatalError( BaseType_t xCode )
 	return xReturn;
 }
 /*-----------------------------------------------------------*/
+
+static void prvUDPEchoClientTask(void* pvParameters)
+{
+    Socket_t xSocket;
+    struct freertos_sockaddr xEchoServerAddress;
+    int8_t cTxString[25], cRxString[25]; /* Make sure the stack is large enough to hold these.  Turn on stack overflow checking during debug to be sure. */
+    int32_t lLoopCount = 0UL;
+    int32_t lReturned;
+    const int32_t lMaxLoopCount = 50;
+    volatile uint32_t ulRxCount = 0UL, ulTxCount = 0UL;
+    uint32_t xAddressLength = sizeof(xEchoServerAddress);
+    BaseType_t xFamily = FREERTOS_AF_INET;
+
+    /* Remove compiler warning about unused parameters. */
+    (void)pvParameters;
+
+    ///* Echo requests are sent to the echo server.  The address of the echo
+    //server is configured by the constants configECHO_SERVER_ADDR0 to
+    //configECHO_SERVER_ADDR3 in FreeRTOSConfig.h. */
+    //xEchoServerAddress.sin_port = FreeRTOS_htons(echoECHO_PORT);
+    //xEchoServerAddress.sin_addr = FreeRTOS_inet_addr_quick(configECHO_SERVER_ADDR0,
+    //    configECHO_SERVER_ADDR1,
+    //    configECHO_SERVER_ADDR2,
+    //    configECHO_SERVER_ADDR3);
+
+
+
+
+
+    memset(&xEchoServerAddress, 0, sizeof(xEchoServerAddress));
+    /* Echo requests are sent to the echo server.  The address of the echo
+    server is configured by the constants configECHO_SERVER_ADDR0 to
+    configECHO_SERVER_ADDR3 in FreeRTOSConfig.h. */
+
+#ifdef configECHO_SERVER_ADDR_STRING
+    {
+        BaseType_t rc = FreeRTOS_inet_pton(FREERTOS_AF_INET6, configECHO_SERVER_ADDR_STRING, (void*)xEchoServerAddress.sin_address.xIP_IPv6.ucBytes);
+        if (rc == pdPASS)
+        {
+            xFamily = FREERTOS_AF_INET6;
+        }
+        else
+        {
+            rc = FreeRTOS_inet_pton(FREERTOS_AF_INET4, configECHO_SERVER_ADDR_STRING, (void*)xEchoServerAddress.sin_address.xIP_IPv6.ucBytes);
+            configASSERT(rc == pdPASS);
+            xFamily = FREERTOS_AF_INET4;
+        }
+    }
+#else
+    {
+        xEchoServerAddress.sin_addr = FreeRTOS_inet_addr_quick(configECHO_SERVER_ADDR0, configECHO_SERVER_ADDR1, configECHO_SERVER_ADDR2, configECHO_SERVER_ADDR3);
+    }
+#endif
+
+    xEchoServerAddress.sin_len = sizeof(xEchoServerAddress);
+    xEchoServerAddress.sin_port = FreeRTOS_htons(configECHO_SERVER_PORT);
+    xEchoServerAddress.sin_family = xFamily;
+
+
+
+
+
+    for (;; )
+    {
+        /* Create a socket. */
+        xSocket = FreeRTOS_socket(xFamily, FREERTOS_SOCK_DGRAM, FREERTOS_IPPROTO_UDP);
+        configASSERT(xSocket != FREERTOS_INVALID_SOCKET);
+
+        /* Set a time out so a missing reply does not cause the task to block
+        indefinitely. */
+        FreeRTOS_setsockopt(xSocket, 0, FREERTOS_SO_RCVTIMEO, &xReceiveTimeOut, sizeof(xReceiveTimeOut));
+
+        /* Send a number of echo requests. */
+        for (lLoopCount = 0; lLoopCount < lMaxLoopCount; lLoopCount++)
+        {
+            /* Create the string that is sent to the echo server. */
+            sprintf((char*)cTxString, "Message number %u\r\n", ulTxCount);
+
+
+
+
+#ifdef configECHO_SERVER_ADDR_STRING
+            {
+                BaseType_t rc = FreeRTOS_inet_pton(FREERTOS_AF_INET6, configECHO_SERVER_ADDR_STRING, (void*)xEchoServerAddress.sin_address.xIP_IPv6.ucBytes);
+                if (rc == pdPASS)
+                {
+                    xFamily = FREERTOS_AF_INET6;
+                }
+                else
+                {
+                    rc = FreeRTOS_inet_pton(FREERTOS_AF_INET4, configECHO_SERVER_ADDR_STRING, (void*)xEchoServerAddress.sin_address.xIP_IPv6.ucBytes);
+                    configASSERT(rc == pdPASS);
+                    xFamily = FREERTOS_AF_INET4;
+                }
+            }
+#else
+            {
+                xEchoServerAddress.sin_addr = FreeRTOS_inet_addr_quick(configECHO_SERVER_ADDR0, configECHO_SERVER_ADDR1, configECHO_SERVER_ADDR2, configECHO_SERVER_ADDR3);
+            }
+#endif
+
+            xEchoServerAddress.sin_len = sizeof(xEchoServerAddress);
+            xEchoServerAddress.sin_port = FreeRTOS_htons(configECHO_SERVER_PORT);
+            xEchoServerAddress.sin_family = xFamily;
+
+
+
+            /* Send the string to the socket.  ulFlags is set to 0, so the zero
+            copy interface is not used.  That means the data from cTxString is
+            copied into a network buffer inside FreeRTOS_sendto(), and cTxString
+            can be reused as soon as FreeRTOS_sendto() has returned.  1 is added
+            to ensure the NULL string terminator is sent as part of the message. */
+            lReturned = FreeRTOS_sendto(xSocket,				/* The socket being sent to. */
+                (void*)cTxString,	/* The data being sent. */
+                strlen((const char*)cTxString) + 1, /* The length of the data being sent. */
+                0,						/* ulFlags with the FREERTOS_ZERO_COPY bit clear. */
+                &xEchoServerAddress,	/* The destination address. */
+                sizeof(xEchoServerAddress));
+
+            if (lReturned == 0)
+            {
+                /* The send operation failed. */
+            }
+            else
+            {
+                /* The send was successful. */
+                FreeRTOS_debug_printf(("[Echo Client] Data sent...  \r\n"));
+            }
+
+            /* Keep a count of how many echo requests have been transmitted so
+            it can be compared to the number of echo replies received.  It would
+            be expected to loose at least one to an ARP message the first time
+            the	connection is created. */
+            ulTxCount++;
+
+            /* Receive data echoed back to the socket.  ulFlags is zero, so the
+            zero copy option is not being used and the received data will be
+            copied into the buffer pointed to by cRxString.  xAddressLength is
+            not actually used (at the time of writing this comment, anyway) by
+            FreeRTOS_recvfrom(), but is set appropriately in case future
+            versions do use it. */
+
+            memset((void*)cRxString, 0x00, sizeof(cRxString));
+            //lReturned = FreeRTOS_recvfrom(xSocket,				/* The socket being received from. */
+            //    cRxString,				/* The buffer into which the received data will be written. */
+            //    sizeof(cRxString),	/* The size of the buffer provided to receive the data. */
+            //    0,						/* ulFlags with the FREERTOS_ZERO_COPY bit clear. */
+            //    &xEchoServerAddress,	/* The address from where the data was sent (the source address). */
+            //    &xAddressLength);
+
+
+
+
+#if USE_ZERO_COPY
+
+            uint8_t* pucReceivedUDPPayload = NULL;
+            lReturned = FreeRTOS_recvfrom(xSocket,
+                &pucReceivedUDPPayload,
+                0,
+                FREERTOS_ZERO_COPY,
+                &xEchoServerAddress,
+                &xAddressLength);
+
+            //configASSERT((pucReceivedUDPPayload != NULL));
+
+            if (pucReceivedUDPPayload != NULL) {
+                memcpy((void*)(cRxString), pucReceivedUDPPayload, 25);
+
+                FreeRTOS_ReleaseUDPPayloadBuffer((void*)pucReceivedUDPPayload);
+            }
+#else
+
+            lReturned = FreeRTOS_recvfrom(xSocket,				/* The socket being received from. */
+                cRxString,				/* The buffer into which the received data will be written. */
+                sizeof(cRxString),	/* The size of the buffer provided to receive the data. */
+                0,						/* ulFlags with the FREERTOS_ZERO_COPY bit clear. */
+                &xEchoServerAddress,	/* The address from where the data was sent (the source address). */
+                &xAddressLength);
+
+#endif /* USE_ZERO_COPY */
+
+
+
+            if (lReturned > 0)
+            {
+                /* Compare the transmitted string to the received string. */
+                if (strcmp((char*)cRxString, (char*)cTxString) == 0)
+                {
+                    /* The echo reply was received without error. */
+                    ulRxCount++;
+                    FreeRTOS_debug_printf(("[Echo Client] Data was received correctly.\r\n"));
+                }
+                else
+                {
+                    FreeRTOS_debug_printf(("[Echo Client] Data received was erreneous.\r\n"));
+                }
+            }
+            else
+            {
+                FreeRTOS_debug_printf(("[Echo Client] Data was not received\r\n"));
+            }
+        }
+
+        /* Pause for a short while to ensure the network is not too
+        congested. */
+        vTaskDelay(echoLOOP_DELAY);
+
+        /* Close this socket before looping back to create another. */
+        FreeRTOS_closesocket(xSocket);
+    }
+}
 
 static void prvEchoClientTask( void* pvParameters )
 {
@@ -275,26 +522,62 @@ FreeRTOS_printf( ( "FreeRTOS_send: %u/%u\n", ( unsigned ) lTransmitted, ( unsign
 				/* Receive data echoed back to the socket. */
 				while( xReceivedBytes < lTransmitted )
 				{
+#if USE_ZERO_COPY
+                    uint8_t* pucReceivedTCPPayload = NULL;
 					xReturned = FreeRTOS_recv( xSocket,								/* The socket being received from. */
-											&( pcReceivedString[ xReceivedBytes ] ),/* The buffer into which the received data will be written. */
+											&pucReceivedTCPPayload,/* The buffer into which the received data will be written. */
 											 lStringLength - xReceivedBytes,		/* The size of the buffer provided to receive the data. */
-											 0 );									/* No flags. */
+                                             FREERTOS_ZERO_COPY);									/* No flags. */
 
 					if( xIsFatalError( xReturned ) ) 
 					{
 						/* Error occurred.  Latch it so it can be detected
 						below. */
+                        //FreeRTOS_ReleaseUDPPayloadBuffer((void*)pucReceivedTCPPayload);
 						break;
 					}
 					if( xReturned == 0 )
 					{
 						/* Timed out. */
 						FreeRTOS_printf( ("recv returned %u\n", ( unsigned ) xReturned) );
+                        //FreeRTOS_ReleaseUDPPayloadBuffer((void*)pucReceivedTCPPayload);
 						break;
 					}
+
+                    memcpy((void*)(&(pcReceivedString[xReceivedBytes])), pucReceivedTCPPayload, xReturned);
+
 					/* Keep a count of the bytes received so far. */
 					xReceivedBytes += xReturned;
 					xTotalRecv += xReturned;
+
+                    
+                    //FreeRTOS_ReleaseUDPPayloadBuffer((void*)pucReceivedTCPPayload);
+                    
+#else
+
+                    xReturned = FreeRTOS_recv(xSocket,								/* The socket being received from. */
+                                             &(pcReceivedString[xReceivedBytes]),/* The buffer into which the received data will be written. */
+                                             lStringLength - xReceivedBytes,		/* The size of the buffer provided to receive the data. */
+                                             0);									/* No flags. */
+
+
+                    if (xIsFatalError(xReturned))
+                    {
+                        /* Error occurred.  Latch it so it can be detected
+                        below. */
+                        break;
+                    }
+                    if (xReturned == 0)
+                    {
+                        /* Timed out. */
+                        FreeRTOS_printf(("recv returned %u\n", (unsigned)xReturned));
+                        break;
+                    }
+                    /* Keep a count of the bytes received so far. */
+                    xReceivedBytes += xReturned;
+                    xTotalRecv += xReturned;
+
+#endif
 				}
 
 				/* If an error occurred it will be latched in xReceivedBytes,
@@ -306,6 +589,7 @@ FreeRTOS_printf( ( "FreeRTOS_send: %u/%u\n", ( unsigned ) lTransmitted, ( unsign
 					configASSERT( strncmp( pcReceivedString, pcTransmittedString, lTransmitted ) == 0 );
 					if( strncmp( pcReceivedString, pcTransmittedString, lTransmitted ) == 0 )
 					{
+                        FreeRTOS_printf(("****************RECV: %s\n", pcReceivedString));
 						/* The echo reply was received without error. */
 						ulTxRxCycles[ xInstance ]++;
 					}

@@ -122,7 +122,7 @@ uint32_t ulApplicationGetNextSequenceNumber( uint32_t ulSourceAddress,
 
     return ( uint32_t ) uxRand();
 }
-
+#if 0
 /* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
  * events are only received if implemented in the MAC driver. */
 void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
@@ -155,7 +155,7 @@ void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
         FreeRTOS_printf( ( "DNS Server Address: %s\r\n\r\n\r\n", cBuffer ) );
     }
 }
-
+#endif
 /*-----------------------------------------------------------*/
 
 void vPlatformInitIpStack( void )
