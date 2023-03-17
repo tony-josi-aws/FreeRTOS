@@ -37,6 +37,8 @@
 
 #include <stdlib.h>
 
+#define ipconfigIPv4_BACKWARD_COMPATIBLE 1
+
 /* Prototype for the function used to print out.  In this case it prints to the
 console before the network is connected then a UDP port after the network has
 connected. */
