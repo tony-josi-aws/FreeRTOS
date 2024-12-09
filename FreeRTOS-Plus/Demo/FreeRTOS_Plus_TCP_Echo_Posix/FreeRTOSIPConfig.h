@@ -53,7 +53,7 @@ extern void vLoggingPrintf( const char * pcFormatString,
 #define ipconfigUSE_IPv6                    ( 1 )
 
 /* Set to 0 to disable backward compatible. */
-#define ipconfigIPv4_BACKWARD_COMPATIBLE    0
+#define ipconfigIPv4_BACKWARD_COMPATIBLE    1
 
 /* Set to 0 to disable compatible for multiple end-points/interfaces.
  * Only one interface/end-point is allowed to use when ipconfigCOMPATIBLE_WITH_SINGLE
